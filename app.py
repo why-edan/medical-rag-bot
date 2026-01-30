@@ -1,70 +1,119 @@
-from flask import Flask, render_template, jsonify, request
-from src.helper import download_hugging_face_embeddings
-from langchain_pinecone import PineconeVectorStore
-from langchain_openai import ChatOpenAI
-from langchain.chains import create_retrieval_chain
-from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain_core.prompts import ChatPromptTemplate
+# app.py
+from fastapi import FastAPI, Form, Request
+from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from dotenv import load_dotenv
-from src.prompt import *
 import os
-
-
-app = Flask(__name__)
-
+import json
+from helper import load_pdfs, text_split, get_embeddings_model, embed_texts
+from pinecone import Pinecone, ServerlessSpec
+from groq import Groq
 
 load_dotenv()
+app = FastAPI()
 
-PINECONE_API_KEY=os.environ.get('PINECONE_API_KEY')
-OPENAI_API_KEY=os.environ.get('OPENAI_API_KEY')
+# --- Serve static files and templates ---
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
 
-os.environ["PINECONE_API_KEY"] = PINECONE_API_KEY
-os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
+# --- Global placeholders ---
+index = None
+emb_model = None
+groq_client = None
+docs = None
+
+# --- Startup event to load everything once ---
+@app.on_event("startup")
+async def startup_event():
+    global index, emb_model, groq_client, docs
+
+    print("⏳ Starting server and initializing RAG resources...")
+
+    # Pinecone setup
+    PINECONE_API_KEY = os.environ.get("PINECONE_API_KEY")
+    pc = Pinecone(api_key=PINECONE_API_KEY)
+    index_name = "medical-chatbot"
+    if not pc.has_index(index_name):
+        pc.create_index(
+            name=index_name,
+            dimension=384,
+            metric="cosine",
+            spec=ServerlessSpec(cloud="aws", region="us-east-1"),
+        )
+    index = pc.Index(index_name)
+
+    # Groq client
+    GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+    groq_client = Groq(api_key=GROQ_API_KEY)
+
+    # Load PDFs & split
+    texts = load_pdfs("data/")
+    docs = text_split(texts)
+    print(f"📄 Total chunks to embed: {len(docs)}")
+
+    # Load embedding model (caches weights locally)
+    emb_model = get_embeddings_model()  # usually SentenceTransformer("all-MiniLM-L6-v2")
+    embeddings = embed_texts([d["text"] for d in docs], emb_model)
+
+    # Batch upsert to Pinecone
+    batch_size = 100
+    for i in range(0, len(docs), batch_size):
+        batch_vectors = [
+            {
+                "id": str(i+j),
+                "values": embeddings[i+j].tolist(),
+                "metadata": {"text": docs[i+j]["text"][:500]}
+            }
+            for j in range(min(batch_size, len(docs)-i))
+        ]
+        index.upsert(batch_vectors)
+    print("✅ All chunks upserted in Pinecone")
 
 
-embeddings = download_hugging_face_embeddings()
-
-index_name = "medical-chatbot" 
-# Embed each chunk and upsert the embeddings into your Pinecone index.
-docsearch = PineconeVectorStore.from_existing_index(
-    index_name=index_name,
-    embedding=embeddings
-)
+# --- Home page ---
+@app.get("/", response_class=HTMLResponse)
+async def home(request: Request):
+    return templates.TemplateResponse("chat.html", {"request": request})
 
 
+# --- Chat endpoint with streaming ---
+@app.post("/get")
+async def get_answer(msg: str = Form(...)):
+    try:
+        # Encode the query
+        query_emb = emb_model.encode([msg])[0].tolist()
 
+        # Pinecone query
+        results = index.query(
+            vector=query_emb,
+            top_k=3,
+            include_metadata=True
+        )
+        context = "\n".join([x["metadata"]["text"] for x in results["matches"]])
 
-retriever = docsearch.as_retriever(search_type="similarity", search_kwargs={"k":3})
+        # Prompt
+        prompt = f"Answer the question using the context below:\n\nContext:\n{context}\n\nQuestion: {msg}\nAnswer:"
 
-chatModel = ChatOpenAI(model="gpt-4o")
-prompt = ChatPromptTemplate.from_messages(
-    [
-        ("system", system_prompt),
-        ("human", "{input}"),
-    ]
-)
+        # Groq chat completion with streaming
+        completion = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",  # Changed to a valid model
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_completion_tokens=1024,
+            stream=True
+        )
 
-question_answer_chain = create_stuff_documents_chain(chatModel, prompt)
-rag_chain = create_retrieval_chain(retriever, question_answer_chain)
+        # Generator function for streaming
+        def generate():
+            for chunk in completion:
+                if chunk.choices[0].delta.content:
+                    # Send each chunk as Server-Sent Events format
+                    yield f"data: {json.dumps({'text': chunk.choices[0].delta.content})}\n\n"
+            yield "data: [DONE]\n\n"
 
+        return StreamingResponse(generate(), media_type="text/event-stream")
 
-
-@app.route("/")
-def index():
-    return render_template('chat.html')
-
-
-
-@app.route("/get", methods=["GET", "POST"])
-def chat():
-    msg = request.form["msg"]
-    input = msg
-    print(input)
-    response = rag_chain.invoke({"input": msg})
-    print("Response : ", response["answer"])
-    return str(response["answer"])
-
-
-
-if __name__ == '__main__':
-    app.run(host="0.0.0.0", port= 8080, debug= True)
+    except Exception as e:
+        # Return error as JSON
+        return {"answer": f"⚠️ Error generating answer: {str(e)}"}
