@@ -2,16 +2,14 @@ const form = document.getElementById("chat-form");
 const chatContainer = document.getElementById("chat");
 const msgInput = document.getElementById("msg");
 
-// Remove welcome message on first interaction
 let firstMessage = true;
 
 form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const msg = msgInput.value.trim();
-    
     if (!msg) return;
 
-    // Remove welcome message
+    // Remove welcome
     if (firstMessage) {
         const welcome = chatContainer.querySelector('.welcome-message');
         if (welcome) {
@@ -21,40 +19,39 @@ form.addEventListener("submit", async (e) => {
         firstMessage = false;
     }
 
-    // Display user message
+    // User message
     const userDiv = document.createElement("div");
     userDiv.className = "user-msg";
     userDiv.textContent = msg;
     chatContainer.appendChild(userDiv);
-    chatContainer.scrollTop = chatContainer.scrollHeight;
+    scrollToBottom();
 
-    // Clear input
     msgInput.value = "";
 
-    // Show typing indicator
+    // Bot typing indicator
     const typingDiv = document.createElement("div");
     typingDiv.className = "bot-msg typing-indicator";
-    typingDiv.innerHTML = '<span></span><span></span><span></span>';
+    typingDiv.innerHTML = `<span></span><span></span><span></span>`;
     chatContainer.appendChild(typingDiv);
-    chatContainer.scrollTop = chatContainer.scrollHeight;
+    scrollToBottom();
+
+    // Create bot reply div (hidden until typing is removed)
+    const botDiv = document.createElement("div");
+    botDiv.className = "bot-msg";
+    botDiv.textContent = "";
 
     try {
-        // Send to FastAPI
         const formData = new FormData();
         formData.append("msg", msg);
 
-        const response = await fetch("/get", { method: "POST", body: formData });
+        const response = await fetch("/get", {
+            method: "POST",
+            body: formData,
+        });
 
-        // Remove typing indicator
         typingDiv.remove();
-
-        // Create bot message container
-        const botDiv = document.createElement("div");
-        botDiv.className = "bot-msg";
-        botDiv.textContent = "";
         chatContainer.appendChild(botDiv);
 
-        // Handle streaming response
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
 
@@ -63,39 +60,32 @@ form.addEventListener("submit", async (e) => {
             if (done) break;
 
             const chunk = decoder.decode(value);
-            const lines = chunk.split('\n');
+            const lines = chunk.split("\n");
 
             for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                    const data = line.slice(6);
-                    if (data === '[DONE]') break;
-                    
+                if (line.startsWith("data: ")) {
+                    const data = line.slice(6).trim();
+                    if (data === "[DONE]") break;
                     try {
                         const parsed = JSON.parse(data);
-                        botDiv.textContent += parsed.text;
-                        chatContainer.scrollTop = chatContainer.scrollHeight;
-                    } catch (e) {
-                        // Skip invalid JSON
-                    }
+                        if (parsed.text) {
+                            botDiv.textContent += parsed.text;
+                            scrollToBottom();
+                        }
+                    } catch (_) {}
                 }
             }
         }
-    } catch (error) {
+    } catch (err) {
         typingDiv.remove();
-        const botDiv = document.createElement("div");
-        botDiv.className = "bot-msg";
-        botDiv.textContent = `⚠️ Error: ${error.message}`;
         chatContainer.appendChild(botDiv);
-        chatContainer.scrollTop = chatContainer.scrollHeight;
+        botDiv.textContent = "Error connecting to server. Please try again.";
+        console.error(err);
     }
+
+    scrollToBottom();
 });
 
-// Add CSS for fadeOut animation
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes fadeOut {
-        from { opacity: 1; transform: scale(1); }
-        to { opacity: 0; transform: scale(0.9); }
-    }
-`;
-document.head.appendChild(style);
+function scrollToBottom() {
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+}

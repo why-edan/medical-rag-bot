@@ -1,5 +1,5 @@
 from helper import load_pdfs, text_split
-from rag.embeddings import encode_texts
+from rag.embedding import encode_texts
 from rag.vectorstore import get_pinecone_index
 
 def main():

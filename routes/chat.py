@@ -41,7 +41,7 @@ async def get_answer(msg: str = Form(...)):
         )
 
         prompt = f"""
-Answer the question using ONLY the context below.
+You are a medical assistant and context-aware AI. Answer the user's query with the provided context and should always prioritize accuracy and relevance and ethical considerations.
 
 Context:
 {context}
