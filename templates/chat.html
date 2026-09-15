@@ -2,67 +2,88 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="color-scheme" content="light">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MedAI - Your Medical Assistant</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <title>MedAI — Medical Consultation</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <!-- Animated Background -->
-    <div class="bg-animation">
-        <div class="particle"></div>
-        <div class="particle"></div>
-        <div class="particle"></div>
-        <div class="particle"></div>
-        <div class="particle"></div>
-        <div class="particle"></div>
-        <div class="particle"></div>
-        <div class="particle"></div>
-    </div>
-
-    <div class="chat-container">
-        <div class="glow-border"></div>
-
-        <!-- Header -->
-        <div class="chat-header">
-            <div class="header-icon">
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM13 17H11V15H13V17ZM13 13H11V7H13V13Z" fill="currentColor"/>
+    <aside class="sidebar">
+        <div class="sidebar-logo">
+            <div class="logo-mark">
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+                    <rect x="9" y="2" width="2" height="16" rx="1" fill="currentColor"/>
+                    <rect x="2" y="9" width="16" height="2" rx="1" fill="currentColor"/>
                 </svg>
             </div>
-            <div>
-                <h1>MED<span class="accent">AI</span></h1>
-                <p class="subtitle">Advanced Medical Intelligence</p>
-            </div>
-            <div class="status-indicator">
-                <span class="pulse"></span>
-                <span class="status-text">ONLINE</span>
-            </div>
+            <span class="logo-text">MedAI</span>
         </div>
 
-        <!-- Chat Box -->
-        <div class="chat-box" id="chat">
-            <div class="welcome-message">
-                <div class="welcome-icon">⚕️</div>
-                <h3>Welcome to MedAI</h3>
-                <p>Your AI-powered medical assistant. Ask me anything about your health concerns.</p>
-            </div>
-        </div>
+        <nav class="sidebar-nav">
+            <span class="nav-label">Sessions</span>
+            <button class="nav-item active" id="new-consult" type="button">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+                New consultation
+            </button>
+            <button class="nav-item" type="button" disabled>
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 4h10M3 8h7M3 12h5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+                History
+            </button>
+        </nav>
 
-        <!-- Input -->
-        <form class="chat-input" id="chat-form">
-            <div class="input-wrapper">
-                <input type="text" id="msg" name="msg" placeholder="Describe your symptoms or ask a medical question..." autocomplete="off" required>
-                <button type="submit">
-                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M2 21L23 12L2 3V10L17 12L2 14V21Z" fill="currentColor"/>
+        <div class="sidebar-footer">
+            <p class="disclaimer-badge">Not a substitute for professional medical advice.</p>
+        </div>
+    </aside>
+
+    <main class="main">
+        <header class="topbar">
+            <div class="topbar-left">
+                <h1 class="topbar-title">Medical Consultation</h1>
+                <span class="live-badge"><span class="live-dot"></span>Active</span>
+            </div>
+            <div class="topbar-right">
+                <span class="engine-badge">openai/gpt-oss-120b</span>
+                <span class="engine-badge">Pinecone RAG</span>
+            </div>
+        </header>
+
+        <div class="chat-area" id="chat">
+            <div class="welcome-block" id="welcome">
+                <div class="welcome-mark">
+                    <svg width="26" height="26" viewBox="0 0 32 32" fill="none">
+                        <rect x="15" y="4" width="2" height="24" rx="1" fill="currentColor"/>
+                        <rect x="4" y="15" width="24" height="2" rx="1" fill="currentColor"/>
                     </svg>
-                </button>
+                </div>
+                <h2 class="welcome-heading">How can I help you today?</h2>
+                <p class="welcome-sub">Ask about symptoms, medications, or any health concern — answers are grounded in medical literature, not guesswork.</p>
+                <div class="suggestion-grid">
+                    <button class="suggestion-chip" type="button" data-prompt="What are the common symptoms of Type 2 diabetes?">Symptoms of Type 2 diabetes</button>
+                    <button class="suggestion-chip" type="button" data-prompt="What is the difference between a viral and a bacterial infection?">Viral vs bacterial infection</button>
+                    <button class="suggestion-chip" type="button" data-prompt="How does hypertension affect the heart?">Hypertension and heart health</button>
+                    <button class="suggestion-chip" type="button" data-prompt="What are common side effects of ibuprofen?">Ibuprofen side effects</button>
+                </div>
             </div>
-        </form>
-    </div>
+        </div>
+
+        <div class="input-area">
+            <form class="input-form" id="chat-form">
+                <div class="input-wrap">
+                    <textarea id="msg" name="msg" placeholder="Describe your symptoms or ask a medical question…" rows="1" required></textarea>
+                    <button type="submit" id="send-btn" aria-label="Send message">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                            <path d="M2 14L14 8L2 2v4.5L10 8l-8 1.5V14z" fill="currentColor"/>
+                        </svg>
+                    </button>
+                </div>
+                <p class="input-note">MedAI can make mistakes. Always verify with a licensed healthcare provider.</p>
+            </form>
+        </div>
+    </main>
 
     <script src="/static/script.js"></script>
 </body>

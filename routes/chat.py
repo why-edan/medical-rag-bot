@@ -51,7 +51,7 @@ Answer:
 """
 
         completion = groq_client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-120b",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
             max_completion_tokens=1024,
@@ -59,9 +59,13 @@ Answer:
         )
 
         def generate():
-            for chunk in completion:
-                if chunk.choices[0].delta.content:
-                    yield f"data: {json.dumps({'text': chunk.choices[0].delta.content})}\n\n"
+            try:
+                for chunk in completion:
+                    if chunk.choices[0].delta.content:
+                        yield f"data: {json.dumps({'text': chunk.choices[0].delta.content})}\n\n"
+            except Exception as stream_err:
+                print(f"[STREAM ERROR] {type(stream_err).__name__}: {stream_err}")
+                yield f"data: {json.dumps({'text': f'[Error: {stream_err}]'})}\n\n"
             yield "data: [DONE]\n\n"
 
         return StreamingResponse(
@@ -70,4 +74,7 @@ Answer:
         )
 
     except Exception as e:
+        print(f"[REQUEST ERROR] {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
         return {"error": str(e)}

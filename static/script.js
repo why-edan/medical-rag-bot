@@ -1,44 +1,75 @@
 const form = document.getElementById("chat-form");
 const chatContainer = document.getElementById("chat");
 const msgInput = document.getElementById("msg");
+const sendBtn = document.getElementById("send-btn");
 
 let firstMessage = true;
+
+// Auto-grow the textarea as the user types
+msgInput.addEventListener("input", () => {
+    msgInput.style.height = "auto";
+    msgInput.style.height = Math.min(msgInput.scrollHeight, 140) + "px";
+});
+
+// Enter to send, Shift+Enter for a newline
+msgInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        form.requestSubmit();
+    }
+});
+
+// Suggestion chips fill the input and send immediately
+document.querySelectorAll(".suggestion-chip").forEach((chip) => {
+    chip.addEventListener("click", () => {
+        msgInput.value = chip.dataset.prompt || chip.textContent.trim();
+        form.requestSubmit();
+    });
+});
+
+function removeWelcome() {
+    const welcome = document.getElementById("welcome");
+    if (!welcome) return;
+    welcome.style.transition = "opacity 0.2s ease";
+    welcome.style.opacity = "0";
+    setTimeout(() => welcome.remove(), 200);
+}
+
+function scrollToBottom() {
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+
+function appendRow(kind) {
+    const row = document.createElement("div");
+    row.className = `msg-row from-${kind}`;
+    const bubble = document.createElement("div");
+    bubble.className = kind === "user" ? "user-msg" : "bot-msg";
+    row.appendChild(bubble);
+    chatContainer.appendChild(row);
+    return { row, bubble };
+}
 
 form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const msg = msgInput.value.trim();
     if (!msg) return;
 
-    // Remove welcome
     if (firstMessage) {
-        const welcome = chatContainer.querySelector('.welcome-message');
-        if (welcome) {
-            welcome.style.animation = 'fadeOut 0.3s ease-out';
-            setTimeout(() => welcome.remove(), 300);
-        }
+        removeWelcome();
         firstMessage = false;
     }
 
-    // User message
-    const userDiv = document.createElement("div");
-    userDiv.className = "user-msg";
-    userDiv.textContent = msg;
-    chatContainer.appendChild(userDiv);
+    appendRow("user").bubble.textContent = msg;
     scrollToBottom();
 
     msgInput.value = "";
+    msgInput.style.height = "auto";
+    sendBtn.disabled = true;
 
-    // Bot typing indicator
-    const typingDiv = document.createElement("div");
-    typingDiv.className = "bot-msg typing-indicator";
-    typingDiv.innerHTML = `<span></span><span></span><span></span>`;
-    chatContainer.appendChild(typingDiv);
+    const typingRow = appendRow("bot");
+    typingRow.bubble.classList.add("typing-indicator");
+    typingRow.bubble.innerHTML = "<span></span><span></span><span></span>";
     scrollToBottom();
-
-    // Create bot reply div (hidden until typing is removed)
-    const botDiv = document.createElement("div");
-    botDiv.className = "bot-msg";
-    botDiv.textContent = "";
 
     try {
         const formData = new FormData();
@@ -49,8 +80,8 @@ form.addEventListener("submit", async (e) => {
             body: formData,
         });
 
-        typingDiv.remove();
-        chatContainer.appendChild(botDiv);
+        typingRow.row.remove();
+        const { bubble: botBubble } = appendRow("bot");
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
@@ -69,7 +100,7 @@ form.addEventListener("submit", async (e) => {
                     try {
                         const parsed = JSON.parse(data);
                         if (parsed.text) {
-                            botDiv.textContent += parsed.text;
+                            botBubble.textContent += parsed.text;
                             scrollToBottom();
                         }
                     } catch (_) {}
@@ -77,15 +108,11 @@ form.addEventListener("submit", async (e) => {
             }
         }
     } catch (err) {
-        typingDiv.remove();
-        chatContainer.appendChild(botDiv);
-        botDiv.textContent = "Error connecting to server. Please try again.";
+        typingRow.row.remove();
+        appendRow("bot").bubble.textContent = "Error connecting to server. Please try again.";
         console.error(err);
+    } finally {
+        sendBtn.disabled = false;
+        scrollToBottom();
     }
-
-    scrollToBottom();
 });
-
-function scrollToBottom() {
-    chatContainer.scrollTop = chatContainer.scrollHeight;
-}
